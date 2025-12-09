@@ -1,0 +1,90 @@
+name: Pipeline CD - Blue/Green (Simulado)
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  # Definimos el umbral del SLO (300ms)
+  SLO_LATENCY_MAX: 300
+
+jobs:
+  # ------------------------------------------------------------------
+  # ETAPA 1: CI (Construcción y Test)
+  # ------------------------------------------------------------------
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar Código
+        uses: actions/checkout@v3
+
+      - name: Ejecutar Tests Unitarios
+        run: echo "Tests unitarios pasados correctamente."
+
+      - name: Construir Imagen Docker
+        run: echo "Construyendo imagen docker mi-app:${{ github.sha }}"
+
+      - name: Subir a Docker Registry
+        run: echo "Imagen subida al repositorio de contenedores."
+
+  # ------------------------------------------------------------------
+  # ETAPA 2: Despliegue a Entornos Previos
+  # ------------------------------------------------------------------
+  deploy-pre-qa:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Desplegar a Pre-Producción
+        run: echo "Desplegando en namespace PRE-PROD..."
+
+      - name: Desplegar a QA
+        run: echo "Desplegando en namespace QA..."
+
+      - name: Tests de Integración
+        run: echo "Tests de integración aprobados."
+
+  # ------------------------------------------------------------------
+  # ETAPA 3: Producción (Blue/Green + Rollback)
+  # ------------------------------------------------------------------
+  deploy-production:
+    needs: deploy-pre-qa
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Desplegar a entorno GREEN (Oculto)
+        run: |
+          echo " Estado actual: BLUE recibe 100% tráfico."
+          echo "Desplegando nueva versión en GREEN..."
+          echo "Health Checks de K8s superados en GREEN."
+
+      - name: Verificar Feature Flags (Unleash)
+        run: echo "Conexión con servidor Unleash establecida. Flags sincronizados."
+
+      - name: Switch de Tráfico (Blue -> Green)
+        run: echo "Cambiando Ingress Controller... Tráfico redirigido a GREEN."
+
+      - name: Validación de SLO (Simulación de Fallo/Éxito)
+        id: slo_check
+        run: |
+          echo "Consultando Prometheus..."
+          # Generamos un número aleatorio entre 100 y 350 para simular latencia
+          LATENCIA=$(shuf -i 100-350 -n 1)
+          echo "Latencia detectada: ${LATENCIA}ms (Máximo permitido: ${{ env.SLO_LATENCY_MAX }}ms)"
+
+          if [ "$LATENCIA" -gt "${{ env.SLO_LATENCY_MAX }}" ]; then
+            echo " ERROR: SLO violado. Latencia muy alta."
+            echo "status=failure" >> $GITHUB_OUTPUT
+            # No forzamos error real (exit 1) para que veas el rollback en el log, 
+            # pero marcamos que falló para el siguiente paso.
+          else
+            echo " SLO cumplido. Despliegue exitoso."
+            echo "status=success" >> $GITHUB_OUTPUT
+          fi
+
+      - name: ROLLBACK AUTOMÁTICO
+        # Este paso solo corre si el anterior detectó fallo
+        if: steps.slo_check.outputs.status == 'failure'
+        run: |
+          echo " INICIANDO ROLLBACK DE EMERGENCIA..."
+          echo " Revirtiendo tráfico hacia entorno BLUE..."
+          echo "Servicio restaurado a versión anterior estable."
