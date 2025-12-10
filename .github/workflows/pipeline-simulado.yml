@@ -18,10 +18,10 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: Ejecutar Tests Unitarios
-        run: echo " Tests unitarios ejecutados correctamente."
+        run: echo "✅ Tests unitarios ejecutados correctamente."
 
       - name: Construir Imagen Docker
-        run: echo " Construyendo imagen y subiendo a Registry..."
+        run: echo "🐳 Construyendo imagen y subiendo a Registry..."
 
   # 2. Crear Entorno de Liberación y Tests [cite: 46, 47]
   release-environment:
@@ -34,10 +34,10 @@ jobs:
         run: |
           echo "Ejecutando terraform init..."
           echo "Ejecutando terraform apply -auto-approve..."
-          echo " Namespace y recursos creados desde /infra/terraform"
+          echo "✅ Namespace y recursos creados desde /infra/terraform"
 
       - name: Desplegar a Entorno de Liberación (Staging)
-        run: echo " Desplegando versión candidata en Staging..."
+        run: echo "🚀 Desplegando versión candidata en Staging..."
 
       - name: Ejecutar Pruebas de Integración
         run: python3 tests/integration_test.py
@@ -54,13 +54,13 @@ jobs:
           # En un entorno real, aquí iría: kubectl apply -f k8s/deploy.yaml
           echo "kubectl apply -f k8s/deploy.yaml"
           echo "kubectl apply -f k8s/service.yaml"
-          echo " Despliegue completado."
+          echo "✅ Despliegue completado."
 
       # Lógica de Rollback exigida por el PDF [cite: 49-51]
       - name: Monitoreo Post-Despliegue (Simulado)
         id: monitor
         run: |
-          echo " Midiendo métricas durante 30s..."
+          echo "📊 Midiendo métricas durante 30s..."
           
           # Simulamos latencia aleatoria entre 200 y 600
           # Si sale > 500, fallará
@@ -71,16 +71,16 @@ jobs:
           echo "Tasa de error: ${ERROR_RATE}% (Límite: ${{ env.MAX_ERROR_RATE }}%)"
 
           if [ "$LATENCY" -gt "${{ env.MAX_LATENCY_MS }}" ] || [ "$ERROR_RATE" -gt "${{ env.MAX_ERROR_RATE }}" ]; then
-            echo "ALERTA CRÍTICA: Métricas fuera de rango."
+            echo "❌ ALERTA CRÍTICA: Métricas fuera de rango."
             echo "status=rollback" >> $GITHUB_OUTPUT
           else
-            echo " Métricas estables. Todo correcto."
+            echo "✅ Métricas estables. Todo correcto."
             echo "status=success" >> $GITHUB_OUTPUT
           fi
 
       - name: EJECUTAR ROLLBACK
         if: steps.monitor.outputs.status == 'rollback'
         run: |
-          echo " Iniciando Rollback Automático..."
+          echo "⚠️ Iniciando Rollback Automático..."
           echo "kubectl rollout undo deployment/mi-app-profesional"
-          echo " Rollback ejecutado exitosamente. Versión anterior restaurada."
+          echo "✅ Rollback ejecutado exitosamente. Versión anterior restaurada."
